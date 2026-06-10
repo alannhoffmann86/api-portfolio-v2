@@ -37,10 +37,16 @@ export default async function handler(req, res) {
 
         const data = await response.json();
         
-        // Sécurité si Google renvoie une erreur (clé invalide, quota dépassé, etc.)
+       // Sécurité si Google renvoie une erreur (clé invalide, quota dépassé, etc.)
         if (data.error) {
             console.error("Erreur renvoyée par Google:", data.error.message);
-            return res.status(400).json({ reply: `[Erreur API Google] : ${data.error.message}` });
+            
+            // Si c'est une erreur de surcharge, on renvoie un message propre
+            if (data.error.message.includes("high demand")) {
+                 return res.status(503).json({ reply: "Mes circuits sont actuellement très sollicités par de nombreux visiteurs. Pouvez-vous réessayer dans un instant ?" });
+            }
+            
+            return res.status(400).json({ reply: `[Erreur Système] : ${data.error.message}` });
         }
 
         // Extraction propre de la réponse de l'IA
