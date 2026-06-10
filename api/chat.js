@@ -1,5 +1,5 @@
 export default async function handler(req, res) {
-    // Gestion du CORS
+    // 1. Gestion du CORS
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -12,13 +12,17 @@ export default async function handler(req, res) {
         return res.status(405).json({ error: 'Méthode non autorisée' });
     }
 
-    const userMessage = req.body.message;
+    const userMessage = req.body?.message;
     const apiKey = process.env.GEMINI_API_KEY;
 
-    // URL officielle de l'API Gemini 1.5 Flash
-    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+    if (!userMessage) {
+        return res.status(400).json({ reply: "Erreur : Aucun message reçu." });
+    }
 
- // Le "System Prompt" enrichi avec tes données réelles
+    // URL officielle de l'API Gemini 1.5 Flash
+    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${apiKey}`;
+
+    // 2. Le "System Prompt" enrichi avec tes données réelles
     const payload = {
         systemInstruction: {
             parts: [{ 
@@ -44,21 +48,26 @@ export default async function handler(req, res) {
         }]
     };
 
+    try {
+        // 3. Requête vers l'IA
+        const response = await fetch(geminiUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+
         const data = await response.json();
         
-       // Sécurité si Google renvoie une erreur (clé invalide, quota dépassé, etc.)
+        // Sécurité si Google renvoie une erreur
         if (data.error) {
             console.error("Erreur renvoyée par Google:", data.error.message);
-            
-            // Si c'est une erreur de surcharge, on renvoie un message propre
             if (data.error.message.includes("high demand")) {
                  return res.status(503).json({ reply: "Mes circuits sont actuellement très sollicités par de nombreux visiteurs. Pouvez-vous réessayer dans un instant ?" });
             }
-            
-            return res.status(400).json({ reply: `[Erreur Système] : ${data.error.message}` });
+            return res.status(400).json({ reply: `[Erreur Système Google] : ${data.error.message}` });
         }
 
-        // Extraction propre de la réponse de l'IA
+        // Extraction propre de la réponse
         if (data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts) {
             const botReply = data.candidates[0].content.parts[0].text;
             return res.status(200).json({ reply: botReply });
@@ -67,7 +76,7 @@ export default async function handler(req, res) {
         }
         
     } catch (error) {
-        console.error("Erreur lors du Fetch:", error);
+        console.error("Erreur lors du Fetch interne:", error);
         return res.status(500).json({ reply: "Désolé, mon serveur relais n'a pas pu contacter l'IA." });
     }
 }
